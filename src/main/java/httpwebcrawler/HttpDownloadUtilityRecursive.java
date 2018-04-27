@@ -25,7 +25,7 @@ import org.jsoup.select.Elements;
 public class HttpDownloadUtilityRecursive {
 	private static int MAX_DEPTH;
 	private static String rootURL;
-	private static final int PAGE_LIMIT = 100;
+//	private static final int PAGE_LIMIT = 100;
 	private static String saveParentDir;
 	int noOfPage = 0;
 	private HashSet<String> visitedURLs;
@@ -35,6 +35,7 @@ public class HttpDownloadUtilityRecursive {
 	/** SLF4J Logger */
 	private final static Logger log = LoggerFactory.getLogger(HttpDownloadUtilityRecursive.class);
 
+	/** Initializing set for URLs */
 	public HttpDownloadUtilityRecursive() {
 		visitedURLs = new HashSet<>();
 	}
@@ -48,7 +49,7 @@ public class HttpDownloadUtilityRecursive {
 	}
 
 	private void getPagesFromWeb(String URL, int depth) {
-		if (!visitedURLs.contains(URL) && depth < MAX_DEPTH && noOfPage < PAGE_LIMIT) {
+		if (!visitedURLs.contains(URL) && depth < MAX_DEPTH /* && noOfPage < PAGE_LIMIT */ ) {
 			log.info(">> Depth: " + depth + " [" + URL + "]");
 			try {
 				visitedURLs.add(URL);
@@ -70,14 +71,14 @@ public class HttpDownloadUtilityRecursive {
 				for (String page : uniqueURLsOnPage) {
 
 					downloadFile(page, saveParentDir);
-					noOfPage++;
-					if (noOfPage < PAGE_LIMIT) {
+//					noOfPage++;
+//					if (noOfPage < PAGE_LIMIT) {
 						getPagesFromWeb(page, depth);
-					} else {
-						log.info("Page limit reached.");
-						log.info("~~~~~~~~~~~~~~~~~~~~HTTP crawler ended~~~~~~~~~~~~~~~~~~~~");
-						System.exit(0);
-					}
+//					} else {
+//						log.info("Page limit reached.");
+//						log.info("~~~~~~~~~~~~~~~~~~~~HTTP crawler ended~~~~~~~~~~~~~~~~~~~~");
+//						System.exit(0);
+//					}
 				}
 			} catch (IOException e) {
 				System.err.println("For '" + URL + "': " + e.getMessage());
@@ -165,7 +166,8 @@ public class HttpDownloadUtilityRecursive {
 	private static String createFileNameWithPath(String stringURL, URL url, String saveParentDir) {
 		String fileName = "";
 		String dirSubPath = "";
-
+		saveParentDir = (saveParentDir + File.separator + url.getHost());
+		
 		fileName = (stringURL.substring(stringURL.lastIndexOf("/") + 1, stringURL.length())
 				+ (stringURL.endsWith(".html") ? "" : ".html")).replaceAll("[\\/:*?<|>]", "_");
 
