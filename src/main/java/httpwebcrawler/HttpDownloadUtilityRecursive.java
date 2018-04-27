@@ -18,48 +18,56 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+/**
+ * @author toszi
+ *
+ */
 public class HttpDownloadUtilityRecursive {
-	private static final int MAX_DEPTH = 3;
+	private static int MAX_DEPTH;
+	private static String rootURL;
 	private static final int PAGE_LIMIT = 100;
-	private String saveParentDir;
+	private static String saveParentDir;
 	int noOfPage = 0;
-	private HashSet<String> visitedLinks;
+	private HashSet<String> visitedURLs;
 	private static final int BUFFER_SIZE = 4096;
 	private static final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 
 	/** SLF4J Logger */
 	private final static Logger log = LoggerFactory.getLogger(HttpDownloadUtilityRecursive.class);
 
-	public void run(String saveTo, String link, int depth) {
-
-		log.info("~~~~~~~~~~~~~~~~~~~~HTTP crawler started~~~~~~~~~~~~~~~~~~~~");
-		this.saveParentDir = saveTo;
-		getPagesFromWeb(link, depth);
+	public HttpDownloadUtilityRecursive() {
+		visitedURLs = new HashSet<>();
 	}
 
-	public HttpDownloadUtilityRecursive() {
-		visitedLinks = new HashSet<>();
+	public void run(String saveTo, String rootPageLink, int maxDepth) {
+		MAX_DEPTH = maxDepth;
+		log.info("~~~~~~~~~~~~~~~~~~~~HTTP crawler started~~~~~~~~~~~~~~~~~~~~");
+		saveParentDir = saveTo;
+		rootURL = rootPageLink;
+		getPagesFromWeb(rootURL, 0);
 	}
 
 	private void getPagesFromWeb(String URL, int depth) {
-		if (!visitedLinks.contains(URL) && depth < MAX_DEPTH && noOfPage < PAGE_LIMIT) {
+		if (!visitedURLs.contains(URL) && depth < MAX_DEPTH && noOfPage < PAGE_LIMIT) {
 			log.info(">> Depth: " + depth + " [" + URL + "]");
 			try {
-				visitedLinks.add(URL);
+				visitedURLs.add(URL);
 				Document document = Jsoup.connect(URL).get();
-				// get all links on given page, not distinct
-				Elements allLinksOnPage = document.select("a[href]");
+
+				// get all URLs on given page, not distinct
+				Elements allURLsOnPage = document.select("a[href]");
 				depth++;
-				// get distinct links
-				HashSet<String> uniqueLinksOnPage =  new HashSet<>();
-				for (Element element : allLinksOnPage) {
-					
+
+				// get distinct URLs and only the URLs which are pointing to original site
+				HashSet<String> uniqueURLsOnPage = new HashSet<>();
+				for (Element element : allURLsOnPage) {
 					String currentLink = element.attr("abs:href");
-					if (!uniqueLinksOnPage.contains(currentLink)) {
-						uniqueLinksOnPage.add(currentLink);
+					URL currentURL = new URL(currentLink);
+					if (!uniqueURLsOnPage.contains(currentLink) && rootURL.contains(currentURL.getHost().toString())) {
+						uniqueURLsOnPage.add(currentLink);
 					}
 				}
-				for (String page : uniqueLinksOnPage) {
+				for (String page : uniqueURLsOnPage) {
 
 					downloadFile(page, saveParentDir);
 					noOfPage++;
@@ -79,8 +87,6 @@ public class HttpDownloadUtilityRecursive {
 	}
 
 	/**
-	 * source:
-	 * https://stackoverflow.com/questions/26454916/download-the-entire-webpage
 	 * Downloads a file from a URL
 	 * 
 	 * @param stringURL
@@ -97,61 +103,100 @@ public class HttpDownloadUtilityRecursive {
 		HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
 		int responseCode = httpConn.getResponseCode();
 
-		// always check HTTP response code first
+		// checks HTTP response code first
 		if (responseCode == HttpURLConnection.HTTP_OK) {
+
+			// Log content for each downloaded file built with StringBuffer
 			StringBuffer logContent = new StringBuffer();
-			logContent.append(dateformat.format(new Date()) + " - Run started\n");
 
-			String fileName = "";
-			String dirSubPath = "";
-			String contentType = httpConn.getContentType();
-			int contentLength = httpConn.getContentLength();
+			String fileNameWithPath = createFileNameWithPath(stringURL, url, saveParentDir);
 
-			// extracts file name from URL
-			fileName = (stringURL.substring(stringURL.lastIndexOf("/") + 1, stringURL.length())
-					+ (stringURL.endsWith(".html") ? "" : ".html")).replaceAll("[\\/:*?<|>]", "_");
+			// Download only if modified
+			// >= operator needed for pages that return 0 for getLastModified 
+			// and they are newly discovered: file lastModified = 0
+			if (httpConn.getLastModified() >= (new File(fileNameWithPath).lastModified())) {
 
-			log.info("Content-Type = " + contentType);
-			log.info("Content-Length = " + contentLength);
+				logContent.append(dateformat.format(new Date()) + " - Run started\n");
 
-			dirSubPath = url.getPath().toString();
-			dirSubPath = (dirSubPath.substring(0, dirSubPath.lastIndexOf("/") + 1));
-			dirSubPath.replace("/", File.separator);
+				String contentType = httpConn.getContentType();
 
-			(new File(saveParentDir + dirSubPath)).mkdirs();
+				log.info("Content-Type = " + contentType);
 
-			// opens input stream from the HTTP connection
-			InputStream inputStream = httpConn.getInputStream();
-			String fileNameWithPath = saveParentDir + dirSubPath + File.separator + fileName;
+				// opens input stream from the HTTP connection
+				InputStream inputStream = httpConn.getInputStream();
 
-			// opens an output stream to save into file
-			FileOutputStream outputStream = new FileOutputStream(fileNameWithPath);
+				// opens an output stream to save into file
+				FileOutputStream outputStream = new FileOutputStream(fileNameWithPath);
 
-			int bytesRead = -1;
-			byte[] buffer = new byte[BUFFER_SIZE];
-			while ((bytesRead = inputStream.read(buffer)) != -1) {
-				outputStream.write(buffer, 0, bytesRead);
+				int bytesRead = -1;
+				byte[] buffer = new byte[BUFFER_SIZE];
+				while ((bytesRead = inputStream.read(buffer)) != -1) {
+					outputStream.write(buffer, 0, bytesRead);
+				}
+
+				outputStream.close();
+				inputStream.close();
+
+				logContent.append("" + dateformat.format(new Date()) + " - Run terminated\n");
+				appendOrCreateLogForFile(stringURL, fileNameWithPath, logContent);
+				log.info("File name = " + fileNameWithPath);
+				log.info("File downloaded");
+			} else {
+				logContent.append(dateformat.format(new Date()) + " - File was already up-to-date\n");
+				appendOrCreateLogForFile(stringURL, fileNameWithPath, logContent);
+				log.info("File was already up-to-date: " + fileNameWithPath + "\n" + stringURL);
 			}
 
-			outputStream.close();
-			inputStream.close();
-
-			logContent.append("" + dateformat.format(new Date()) + " - Run terminated\n");
-			createLogForFile(fileNameWithPath, logContent);
-			log.info("File name = " + fileNameWithPath);
-			log.info("File downloaded");
 		} else {
-			log.error("No file to download. Server replied HTTP code: " + responseCode);
+			log.error("No file to download. Server replied HTTP code: " + responseCode + "\n From site: " + stringURL);
 		}
 		httpConn.disconnect();
 	}
 
-	private static void createLogForFile(String fileNameWithPath, StringBuffer logContent) {
+	/**
+	 * Builds string file name with path and creates location if not exists
+	 * 
+	 * @param stringURL
+	 * @param url
+	 * @param saveParentDir
+	 * @return the html filename with absolute path, including sub-dirs from URL
+	 *         structure
+	 */
+	private static String createFileNameWithPath(String stringURL, URL url, String saveParentDir) {
+		String fileName = "";
+		String dirSubPath = "";
+
+		fileName = (stringURL.substring(stringURL.lastIndexOf("/") + 1, stringURL.length())
+				+ (stringURL.endsWith(".html") ? "" : ".html")).replaceAll("[\\/:*?<|>]", "_");
+
+		dirSubPath = url.getPath().toString();
+		dirSubPath = (dirSubPath.substring(0, dirSubPath.lastIndexOf("/") + 1));
+		dirSubPath.replace("/", File.separator);
+
+		(new File(saveParentDir + dirSubPath)).mkdirs();
+		String fileNameWithPath = saveParentDir + dirSubPath + File.separator + fileName;
+
+		return fileNameWithPath;
+	}
+
+	/**
+	 * Append to the top of the log file or create if not exists
+	 * 
+	 * @param fileNameWithPath
+	 *            - The original file, log file will have the original file name
+	 *            with a .log ending
+	 * @param logContent
+	 *            - content of log to append to the beginning of the file
+	 */
+	private static void appendOrCreateLogForFile(String url, String fileNameWithPath, StringBuffer logContent) {
 
 		try {
-			// then append to the top of the file
 			RandomAccessFile file = new RandomAccessFile(new File(fileNameWithPath + ".log"), "rws");
 			byte[] text = new byte[(int) file.length()];
+
+			if (file.length() == 0) {
+				logContent.append("\nOriginal link: " + url);
+			}
 			file.readFully(text);
 			file.seek(0);
 			file.writeBytes(logContent.toString() + "\n");
