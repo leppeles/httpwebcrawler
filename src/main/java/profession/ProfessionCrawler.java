@@ -42,7 +42,14 @@ public class ProfessionCrawler {
 	}
 
 	private void getJobs(String linkFirstPart, String linkSecondPart) {
-		for (int i = 0; i < 2; i++) {
+
+		int n = 0;
+		while (isExistingSite(linkFirstPart, linkSecondPart, n)) {
+
+			n++;
+		}
+
+		for (int i = 0; i < 1; i++) {
 
 			StringBuilder tempURL = new StringBuilder();
 			tempURL.append(linkFirstPart);
@@ -58,6 +65,28 @@ public class ProfessionCrawler {
 
 	}
 
+	private boolean isExistingSite(String linkFirstPart, String linkSecondPart, int siteCount) {
+
+		StringBuilder tempURL = new StringBuilder();
+		tempURL.append(linkFirstPart);
+		tempURL.append(siteCount);
+		tempURL.append(linkSecondPart);
+
+		URL url;
+		int responseCode = 0;
+		try {
+			url = new URL(tempURL.toString());
+			HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
+			responseCode = httpConn.getResponseCode();
+			System.out.println(tempURL);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		return responseCode == HttpURLConnection.HTTP_OK;
+	}
+
 	private void getListOfJobs(StringBuilder tempURL) throws IOException {
 		URL url = new URL(tempURL.toString());
 		HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
@@ -66,15 +95,29 @@ public class ProfessionCrawler {
 
 		// checks HTTP response code first
 		if (responseCode == HttpURLConnection.HTTP_OK) {
+
 			Document doc = Jsoup.connect(tempURL.toString()).get();
 			Elements jobNodes = doc.getElementsByTag("li");
+
 			for (Element jobNode : jobNodes) {
+
 				Elements jobTitle = jobNode.getElementsByTag("strong");
 				Elements jobSalary = jobNode.getElementsByTag("dd");
+				Elements jobLocation = jobNode.getElementsByClass("position_and_company").select("span");
+				Elements jobLink = jobNode.select("a[href]");
+				Elements jobDescription = jobNode.getElementsByClass("list_tasks");
+
 				if (jobTitle.size() > 0 && jobSalary.size() > 0) {
+
 					System.out.print(jobTitle.get(0).text());
 					System.out.print(" ----- ");
-					System.out.println(jobSalary.get(0).text());
+					System.out.print(jobSalary.get(0).text());
+					System.out.print(" ----- ");
+					System.out.print(jobLocation.hasText() ? jobLocation.get(0).text() : "");
+					System.out.print(" ----- ");
+					System.out.print(jobLink.isEmpty() ? "" : jobLink.get(0).attr("href"));
+					System.out.print(" ----- ");
+					System.out.println(jobDescription.hasText() ? jobDescription.get(0).text() : "");
 				}
 			}
 		} else {
