@@ -7,6 +7,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -30,6 +32,7 @@ public class ProfessionCrawler {
 
 	private static String saveParentDir;
 	int noOfPage = 0;
+	int noOfJobs = 0;
 	private HashSet<String> visitedURLs;
 	private static final int BUFFER_SIZE = 4096;
 	private static Workbook workbook;
@@ -56,18 +59,21 @@ public class ProfessionCrawler {
 		Workbook workbook = new XSSFWorkbook();
 
 		Sheet sheet = workbook.createSheet(sheetName);
-		sheet.setColumnWidth(0, 6000);
-		sheet.setColumnWidth(1, 4000);
+		sheet.setColumnWidth(0, 10000);
+		sheet.setColumnWidth(1, 6000);
+		sheet.setColumnWidth(2, 10000);
+		sheet.setColumnWidth(3, 25000);
+		sheet.setColumnWidth(4, 6000);
 
 		Row header = sheet.createRow(0);
 
 		CellStyle headerStyle = workbook.createCellStyle();
-		headerStyle.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
+		headerStyle.setFillForegroundColor(IndexedColors.SKY_BLUE.getIndex());
 		headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
 		XSSFFont font = ((XSSFWorkbook) workbook).createFont();
-		font.setFontName("Arial");
-		font.setFontHeightInPoints((short) 16);
+		font.setFontName("Times New Roman");
+		font.setFontHeightInPoints((short) 14);
 		font.setBold(true);
 		headerStyle.setFont(font);
 
@@ -118,6 +124,24 @@ public class ProfessionCrawler {
 				e.printStackTrace();
 			}
 		}
+		try {
+			closeWorkbook();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}
+
+	private void closeWorkbook() throws IOException {
+
+		File currDir = new File(saveParentDir);
+		String path = currDir.getAbsolutePath();
+		String fileLocation = path.substring(0, path.length() - 1) + "profSalaries.xlsx";
+
+		FileOutputStream outputStream = new FileOutputStream(fileLocation);
+		workbook.write(outputStream);
+		workbook.close();
 
 	}
 
@@ -144,6 +168,8 @@ public class ProfessionCrawler {
 	}
 
 	private void extractEntities(StringBuilder tempURL) throws IOException {
+		Job job = new Job();
+		List<String> jobProps = new LinkedList<>();
 		URL url = new URL(tempURL.toString());
 		HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
 		int responseCode = httpConn.getResponseCode();
@@ -153,6 +179,10 @@ public class ProfessionCrawler {
 		if (responseCode == HttpURLConnection.HTTP_OK) {
 
 			Document doc = Jsoup.connect(tempURL.toString()).get();
+
+			Element noOfFoundJobs = doc.getElementsByClass("list").select("span").first();
+			System.out.println(noOfFoundJobs.text());
+
 			Elements jobNodes = doc.getElementsByTag("li");
 
 			for (Element jobNode : jobNodes) {
@@ -165,62 +195,30 @@ public class ProfessionCrawler {
 
 				if (jobTitle.size() > 0 && jobSalary.size() > 0) {
 
-					System.out.print(jobTitle.get(0).text());
-					System.out.print(" ----- ");
-					System.out.print(jobSalary.get(0).text());
-					System.out.print(" ----- ");
-					System.out.print(jobLocation.hasText() ? jobLocation.get(0).text() : "");
-					System.out.print(" ----- ");
-					System.out.print(jobLink.isEmpty() ? "" : jobLink.get(0).attr("href"));
-					System.out.print(" ----- ");
-					System.out.println(jobDescription.hasText() ? jobDescription.get(0).text() : "");
+					job.setTitle(jobTitle.get(0).text());
+					job.setSalary(jobSalary.get(0).text());
+					job.setLocation(jobLocation.hasText() ? jobLocation.get(0).text() : "");
+					job.setLink(jobLink.isEmpty() ? "" : jobLink.get(0).attr("href"));
+					job.setDescription(jobDescription.hasText() ? jobDescription.get(0).text() : "");
 
-					Workbook workbook = new XSSFWorkbook();
+					// System.out.println(job.toString());
 
-					Sheet sheet = workbook.createSheet("temp");
-					sheet.setColumnWidth(0, 6000);
-					sheet.setColumnWidth(1, 4000);
-
-					Row header = sheet.createRow(0);
-
-					CellStyle headerStyle = workbook.createCellStyle();
-					headerStyle.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
-					headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-					XSSFFont font = ((XSSFWorkbook) workbook).createFont();
-					font.setFontName("Arial");
-					font.setFontHeightInPoints((short) 16);
-					font.setBold(true);
-					headerStyle.setFont(font);
-
-					Cell headerCell = header.createCell(0);
-					headerCell.setCellValue("Name");
-					headerCell.setCellStyle(headerStyle);
-
-					headerCell = header.createCell(1);
-					headerCell.setCellValue("Age");
-					headerCell.setCellStyle(headerStyle);
-
+					Sheet sheet = workbook.getSheet(sheetName);// createSheet("temp");
 					CellStyle style = workbook.createCellStyle();
 					style.setWrapText(true);
 
-					Row row = sheet.createRow(2);
-					Cell cell = row.createCell(0);
-					cell.setCellValue("John Smith");
-					cell.setCellStyle(style);
+					Row row = sheet.createRow(noOfJobs + 1);
 
-					cell = row.createCell(1);
-					cell.setCellValue(20);
-					cell.setCellStyle(style);
+					jobProps = job.getListOfProps();
 
-					File currDir = new File(saveParentDir);
-					String path = currDir.getAbsolutePath();
-					String fileLocation = path.substring(0, path.length() - 1) + "profSalaries.xlsx";
+					for (int i = 0; i < jobProps.size(); i++) {
+						Cell cell = row.createCell(i);
+						cell.setCellValue(jobProps.get(i));
+						// cell.setCellStyle(style);
+					}
 
-					FileOutputStream outputStream = new FileOutputStream(fileLocation);
-					workbook.write(outputStream);
-					workbook.close();
-
+					noOfJobs++;
+					jobProps.clear();
 				}
 			}
 		} else {
