@@ -32,7 +32,8 @@ public class ProfessionCrawler {
 
 	private static String saveParentDir;
 	int noOfPage = 0;
-	int noOfJobs = 0;
+	int totalJobCount = 0;
+	int currentJobCount = 0;
 	private HashSet<String> visitedURLs;
 	private static final int BUFFER_SIZE = 4096;
 	private static Workbook workbook;
@@ -106,24 +107,21 @@ public class ProfessionCrawler {
 
 	private void loopThrough(String linkFirstPart, String linkSecondPart) {
 
-		// int noOfPages = 0;
-		// while (isExistingSite(linkFirstPart, linkSecondPart, noOfPages)) {
-		// noOfPages++;
-		// }
-
-		for (int i = 0; i < 1; i++) {
+		do {
 
 			StringBuilder tempURL = new StringBuilder();
 			tempURL.append(linkFirstPart);
-			tempURL.append(i);
+			tempURL.append(noOfPage);
 			tempURL.append(linkSecondPart);
 			try {
 				extractEntities(tempURL);
+				noOfPage++;
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-		}
+		} while (currentJobCount < totalJobCount - 1);
+
 		try {
 			closeWorkbook();
 		} catch (IOException e) {
@@ -145,28 +143,6 @@ public class ProfessionCrawler {
 
 	}
 
-	private boolean isExistingSite(String linkFirstPart, String linkSecondPart, int noOfPages) {
-
-		StringBuilder tempURL = new StringBuilder();
-		tempURL.append(linkFirstPart);
-		tempURL.append(noOfPages);
-		tempURL.append(linkSecondPart);
-
-		URL url;
-		int responseCode = 0;
-		try {
-			url = new URL(tempURL.toString());
-			HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
-			responseCode = httpConn.getResponseCode();
-			System.out.println(tempURL);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-		return responseCode == HttpURLConnection.HTTP_OK;
-	}
-
 	private void extractEntities(StringBuilder tempURL) throws IOException {
 		Job job = new Job();
 		List<String> jobProps = new LinkedList<>();
@@ -180,8 +156,11 @@ public class ProfessionCrawler {
 
 			Document doc = Jsoup.connect(tempURL.toString()).get();
 
-			Element noOfFoundJobs = doc.getElementsByClass("list").select("span").first();
-			System.out.println(noOfFoundJobs.text());
+			if (totalJobCount == 0) {
+				getTotalJobCount(doc);
+
+				System.out.println("Number of found jobs: " + totalJobCount);
+			}
 
 			Elements jobNodes = doc.getElementsByTag("li");
 
@@ -207,7 +186,7 @@ public class ProfessionCrawler {
 					CellStyle style = workbook.createCellStyle();
 					style.setWrapText(true);
 
-					Row row = sheet.createRow(noOfJobs + 1);
+					Row row = sheet.createRow(currentJobCount + 1);
 
 					jobProps = job.getListOfProps();
 
@@ -217,7 +196,7 @@ public class ProfessionCrawler {
 						// cell.setCellStyle(style);
 					}
 
-					noOfJobs++;
+					currentJobCount++;
 					jobProps.clear();
 				}
 			}
@@ -226,5 +205,38 @@ public class ProfessionCrawler {
 		}
 		httpConn.disconnect();
 	}
+
+	private void getTotalJobCount(Document doc) {
+
+		Element totalJobCountEl = doc.getElementsByClass("list").select("span").first();
+		String totalJobCountStr = totalJobCountEl.text();
+
+		// remove digits
+		totalJobCountStr = totalJobCountStr.replaceAll("\\D+", "");
+		Integer totalJobCountInt = Integer.valueOf(totalJobCountStr);
+		totalJobCount = totalJobCountInt;
+	}
+
+	// private boolean isExistingSite(String linkFirstPart, String linkSecondPart, int noOfPages) {
+	//
+	// StringBuilder tempURL = new StringBuilder();
+	// tempURL.append(linkFirstPart);
+	// tempURL.append(noOfPages);
+	// tempURL.append(linkSecondPart);
+	//
+	// URL url;
+	// int responseCode = 0;
+	// try {
+	// url = new URL(tempURL.toString());
+	// HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
+	// responseCode = httpConn.getResponseCode();
+	// System.out.println(tempURL);
+	// } catch (IOException e) {
+	// // TODO Auto-generated catch block
+	// e.printStackTrace();
+	// }
+	//
+	// return responseCode == HttpURLConnection.HTTP_OK;
+	// }
 
 }
