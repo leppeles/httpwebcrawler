@@ -5,8 +5,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.text.SimpleDateFormat;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -34,20 +32,12 @@ public class ProfessionCrawler {
 	int noOfPage = 0;
 	int totalJobCount = 0;
 	int currentJobCount = 0;
-	private HashSet<String> visitedURLs;
-	private static final int BUFFER_SIZE = 4096;
 	private static Workbook workbook;
 	private static final String sheetName = "Joblist";
-	private static final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 	String rootURL;
 
 	/** SLF4J Logger */
 	private final static Logger log = LoggerFactory.getLogger(HttpDownloadUtilityRecursive.class);
-
-	/** Initializing set for URLs */
-	public ProfessionCrawler() {
-		visitedURLs = new HashSet<>();
-	}
 
 	public void run(String globalProfURL, String localProfURL, String saveTo) {
 		log.info("~~~~~~~~~~~~~~~~~~~~HTTP crawler started~~~~~~~~~~~~~~~~~~~~");
